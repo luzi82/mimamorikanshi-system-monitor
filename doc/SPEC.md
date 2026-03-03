@@ -4,56 +4,53 @@ The following is the updated spec of software project MimamoriKanshi-system-moni
 
 ## Aim
 
-* A indicator widget to monitor the following system status
+* An indicator widget to monitor the following system status
   * CPU %
   * Memory %
-  * Disk read/write loading
-  * Network up/down loading
+  * Disk read/write throughput
+  * Network upload/download throughput
 
 ## Design
 
 * Two executables
   * DAEMON
     * A background monitor daemon
-    * monitor system usages
-    * generate indicator image
-    * generate frequency: 0.5s per tick
+    * monitor system usage
+    * generate indicator image file
   * GENMON:
     * Called by xfce4-genmon-plugin
     * launch DAEMON
     * echo DAEMON image path to xfce4-genmon-plugin
-    * generate frequency: 0.5s per tick
-* Run flow
+    * Tick interval: set by xfce4-genmon-plugin (my target: 0.5s)
+* Run flow (for GENMON interval=tick_ms=500)
   1. t=0s, GENMON launch, start DAEMON, show empty image, exit
-  1. t=0.01s, DAEMON start, generate indicator image, wait in background
+  1. t=0.01s, DAEMON start, generate indicator image file, wait for next tick
   1. t=0.5s, GENMON launch, echo DAEMON image output to xfce4-genmon-plugin, exit
-  1. t=0.75s, DAEMON wait done, generate indicator image, wait in background
+  1. t=0.51s, DAEMON wait done, generate indicator image file, wait for next tick
   1. t=1s, GENMON launch, echo DAEMON image output to xfce4-genmon-plugin, exit
-  1. t=1.25s, DAEMON wait done, generate indicator image, wait in background
+  1. t=1.01s, DAEMON wait done, generate indicator image file, wait for next tick
 * Indicator image design
   * 6 rows
-    * CPU % (green)
-    * Memory % (yellow)
-    * Disk read MB/s (blue)
-    * Disk write MB/s (red)
+    * CPU %
+    * Memory %
+    * Disk read MiB/s
+    * Disk write MiB/s
       * sum of selected disks in config
-    * Network up MB/s (blue)
-    * Network down MB/s (red)
+    * Network download MiB/s
+    * Network upload MiB/s
       * sum of selected networks in config
   * For each row
     * x-axis: time
       * 1 pixel per DAEMON tick
-      * last 3 pixel are the latest value
+      * the right most latest_value_px width show the latest value
     * y-axis: value
       * For CPU/memory, max is 100%
-      * For other
-        * the max is history max \* 61.8%
-        * half-life decay 30 sec
-        * reset in each DAEMON start
-    * left 50% opacity white text
+      * For other, max is set in config
+        * if value is over max, just draw to max.
+    * text align to left
       * overlap the history graph
       * show current value
-      * only number, no "%" and "MB/s"
+      * only number, round to nearest integer, no "%" and "MiB/s"
 
 ## DAEMON
 
@@ -61,20 +58,25 @@ The following is the updated spec of software project MimamoriKanshi-system-moni
 * Monitoring
   * CPU: /proc/stat
   * Memory: /proc/meminfo
-  * Disk read/write: /proc/diskstats
-  * Network up/down: /proc/net/dev
+  * Disk read/write:
+    * /proc/diskstats
+    * diff with last value
+  * Network up/down:
+    * /proc/net/dev
+    * diff with last value
 * Process
   1. Launched by GENMON
-  1. Flock read DAEMON.out, timeout 0.3 sec
-    * If timeout, exit with error
-    * If DAEMON already running (check pid), exit with error
+  1. If another DAEMON instance is already running, exit.
   1. Loop in background
-    1. Flock-read GENMON.out
-    1. If GENMON inactive for 10sec, quit loop
+    1. Read GENMON.out
+    1. If GENMON timestamp is lesser than last time, system clock may be modified, exit immediately, will be respawn by next GENMON tick
+    1. If GENMON inactive for daemon_exit_if_genmon_inactive_sec, exit immediately
+    1. If the modification time of config.yaml updated, exit immediately, will be respawn by next GENMON tick
     1. Get system usage values
     1. Output the indicator image to the unused image path
-    1. Flock-write DAEMON.out, mark the last output image path
-    1. Wait to 0.75 sec after last GENMON timestamp, or 0.5 sec after now if GENMON inactive
+    1. Write DAEMON.out, mark the last output image path
+    1. Wait to estimated next genmon tick + genmon_after_daemon_min_gap_ms
+      * if wait time bigger than 2*tick_ms, exit immediately, will be respawn by next GENMON tick
 
 ## GENMON
 
@@ -82,44 +84,78 @@ The following is the updated spec of software project MimamoriKanshi-system-moni
 * Echo DAEMON image output path to xfce4-genmon-plugin
 * Process
   1. Launched by xfce4-genmon-plugin
-  1. Flock-read DAEMON.out, timeout 0.3 sec
-  1. If DAEMON.out read timeout, echo err text to xfce4-genmon-plugin
-  1. If DAEMON is inactive, start DAEMON, echo loading text to xfce4-genmon-plugin
+  1. If another GENMON instance is already running, exit.
+  1. If no running DAEMON instance
+    1. Write GENMON.out: img_id = -1, timestamp=now
+    1. launch DAEMON in background
+    1. echo loading text to xfce4-genmon-plugin
+    1. exit
   1. If DAEMON is active, echo DAEMON last generated image to xfce4-genmon-plugin
-  1. Flock-write GENMON.out, mark the execution timestamp, the reading image path
+  1. Write GENMON.out, mark the execution timestamp, the reading image path
   1. exit
 
 ## Work folder /dev/shm/mimamorikanshi
 
 * lock
   * lock file used by DAEMON and GENMON
-  * Flock-read operations: lock this file, read the target file, unlock this file
-  * Flock-write operations: write to tmp file, lock this file, replace the target file with tmp file, unlock this file
+  * Use non-blocking flock
+  * Read operations to other files: lock this file, read the target file, unlock this file
+  * Write operations to other files: write to tmp file, lock this file, replace the target file with tmp file, unlock this file
+* DAEMON.run
+  * read/write protected by lock file
+  * file to check DAEMON running
+  * pid + start_time
 * DAEMON.out
+  * read/write protected by lock file
   * key=value format
-  * pid: the pid of DAEMON
   * timestamp: DAEMON last execution time
   * img_id: the ID of last image generated
+* GENMON.run
+  * read/write protected by lock file
+  * file to check GENMON running
+  * pid + start_time
 * GENMON.out
+  * read/write protected by lock file
   * key=value format
   * timestamp: GENMON last execution time
   * img_id: the ID of last image echoed to xfce4-genmon-plugin
-* img.0.png, img.1.png, img.2.png
+* img.0.ppm, img.1.ppm, img.2.ppm
   * Image generated by DAEMON, read by xfce4-genmon-plugin
+  * Act like 3 image buffer
   * ID: 0, 1, 2
-  * When DAEMON last generate is 0, GENMON last echo is 1, DAEMON should choose 2 as the next generate
-  * Only 3 images, there is no img.3.png .
+  * When DAEMON last generate is ID=D, GENMON last echo is ID=G, DAEMON should choose ID!=D/G for the next generate
+  * Only 3 images, there is no img.3.ppm .
 
 ## config.yaml
 
 * read by DAEMON
-* width: image width px
-* height: height px per data row
-* separator: px between rows
-* font_family: font of text
-* font_size: font size
+* width_px: image width px (estimate around 26)
+* height_px: height px per data row (estimate around 10)
+* latest_value_px
+* background_color
+* border_px: px of whole image border
+* border_color: color of whole image border
+* separator_px: px between rows
+* separator_color
+* text_color
+* text_left_padding_px
+* text_font_family: font of text
+* text_font_size: font size
+* cpu_color
+* memory_color
 * disks: list of disk ID to be monitored in /proc/diskstats
+* disk_read_color
+* disk_read_max_mib_s: max MiByte/s in graph y axis
+* disk_write_color
+* disk_write_max_mib_s: max MiByte/s in graph y axis
 * networks: list of network ID to be monitored in /proc/net/dev
+* network_download_color
+* network_download_max_mib_s: max MiByte/s in graph y axis
+* network_upload_color
+* network_upload_max_mib_s: max MiByte/s in graph y axis
+* tick_ms: DAEMON/GENMON tick ms, user should sync it with xfce4-genmon-plugin setting
+* genmon_after_daemon_min_gap_ms: the min time gap between daemon and genmon tick.  If the tick getting close, daemon should add more delay.  Otherwise if the tick too close, genmon may skip frame or keep drawing old frame.
+* daemon_exit_if_genmon_inactive_sec: if GENMON.out not updated for that sec, DAEMON exit.
 
 ## remark
 
@@ -131,7 +167,9 @@ The following is the updated spec of software project MimamoriKanshi-system-moni
   * User may trigger other GENMON/DAEMON instance in the middle of rm operation, very hard to debug
 * /proc/\* vs python3-psutil
   * python3-psutil have higher overhead
-  * 
+* xfce4-genmon-plugin support ppm p6 binary, tested in Xbuntu 24.04.
+* Will use Python pillow to draw ppm p6 binary image
+* The widget is designed to be put in vertical panel.
 
 ===
 
