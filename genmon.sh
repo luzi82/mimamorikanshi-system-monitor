@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/bin/bash -e
+
 # MimamoriKanshi System Monitor - GENMON
 #
 # Called by xfce4-genmon-plugin.
