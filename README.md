@@ -29,6 +29,22 @@ A lightweight native Xfce panel plugin that monitors system metrics with scrolli
 
 ## Building
 
+### Prerequisites (Xubuntu 24.04)
+
+Install the required development packages:
+
+```sh
+sudo apt-get install -y \
+  pkg-config \
+  libgtk-3-dev \
+  libxfce4panel-2.0-dev \
+  libxfce4ui-2-dev \
+  libxfconf-0-dev \
+  libcairo2-dev
+```
+
+### Compile
+
 ```sh
 meson setup builddir
 ninja -C builddir
