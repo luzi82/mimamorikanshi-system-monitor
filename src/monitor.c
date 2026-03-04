@@ -189,9 +189,9 @@ read_disk(MonitorState *state, gchar **disks, gint n_disks,
         for (gint i = 0; i < n_disks; i++) {
             if (g_strcmp0(devname, disks[i]) == 0) {
                 gpointer p = g_hash_table_lookup(state->sector_sizes, devname);
-                guint ss = p ? GPOINTER_TO_UINT(p) : DEFAULT_SECTOR_SIZE;
-                sectors_read    += rd * ss;
-                sectors_written += wr * ss;
+                guint sector_size = p ? GPOINTER_TO_UINT(p) : DEFAULT_SECTOR_SIZE;
+                sectors_read    += rd * sector_size;
+                sectors_written += wr * sector_size;
                 break;
             }
         }
