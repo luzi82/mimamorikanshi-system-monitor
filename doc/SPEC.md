@@ -1,5 +1,3 @@
-The following is the updated spec of software project MimamoriKanshi-system-monitor
-
 # SPEC - MimamoriKanshi System Monitor (C/GTK Version)
 
 ## Aim
@@ -112,11 +110,3 @@ Behavior on suspend/resume:
 - **Configurable**: `suspend-after-ms = 0` disables suspension. `suspend-poll-ms` controls how quickly the plugin detects resume while suspended.
 
 Implementations should log suspend/resume events at debug level for troubleshooting.
-
-===
-
-For the above spec:
-* Comment
-* Check typo
-* Suggest improvement
-* Ask question
