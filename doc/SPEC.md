@@ -42,6 +42,8 @@ The following is the updated spec of software project MimamoriKanshi-system-moni
 * **Disk**: Read from `/proc/diskstats`. Sum the sectors read/written for all configured disks and convert to MiB/s. To accurately convert sector counts to bytes, the plugin MUST read the per-device sector size from `/sys/block/<dev>/queue/logical_block_size` at program start and whenever the configured `disks` list changes. Use the reported `logical_block_size` (bytes per sector) to convert sectors → bytes → MiB/s. Cache per-device sector sizes and refresh them on configuration changes. If a sysfs entry is unavailable or unreadable, fall back to a sensible default (512 bytes) and log a warning.
 * **Network**: Read from `/proc/net/dev`. Sum the bytes received/transmitted for all configured interfaces and convert to MiB/s.
 
+* **Initial sample behavior**: On program initialization (first run) the plugin MUST discard the first set of collected samples used for delta calculations to avoid emitting a large, spurious spike. Similarly, after any suspended period when normal polling resumes, the plugin MUST reinitialize short-lived baselines (e.g., previous `/proc` counters) and discard the first measurement/sample produced after resume before updating the history graph.
+
 ### Configuration (Xfconf)
 Properties are stored in the `xfce4-panel` channel under the base path `/plugins/panel/mimamorikanshi-N/` (where `N` is the plugin instance ID). Standard Xfce practice is to bind these properties directly to the UI widgets for immediate updates.
 
@@ -107,6 +109,7 @@ A settings dialog is provided to modify the plugin configuration. It follows Xfc
 Behavior on suspend/resume:
 - **Suspend**: stop the GLib timer used for regular polling and pause expensive work (disk/net parsing, large Cairo compositing). Keep minimal state alive to allow quick resume.
 - **Resume**: on detecting an active condition, reinitialize short-lived baselines (e.g., reset previous /proc counters used for delta calculations) rather than emitting a large instantaneous spike. Skip or emit a clipped first sample and then resume normal polling.
+- **Resume**: on detecting an active condition, reinitialize short-lived baselines (e.g., reset previous `/proc` counters used for delta calculations) and discard the first measurement/sample after resume to avoid a large instantaneous spike. After discarding that first measurement, resume normal polling and recording.
 - **Configurable**: `suspend-after-ms = 0` disables suspension. `suspend-poll-ms` controls how quickly the plugin detects resume while suspended.
 
 Implementations should log suspend/resume events at debug level for troubleshooting.
