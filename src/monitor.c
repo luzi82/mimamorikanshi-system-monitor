@@ -60,26 +60,60 @@ mimamorikanshi_monitor_refresh_sector_sizes(MonitorState *state,
     g_hash_table_remove_all(state->sector_sizes);
 
     for (gint i = 0; i < n_disks; i++) {
-        gchar *path = g_strdup_printf("/sys/block/%s/queue/logical_block_size",
-                                       disks[i]);
+        gchar *device = disks[i];
+        gchar *path = g_strdup_printf("/sys/block/%s/queue/logical_block_size", device);
         FILE *fp = fopen(path, "r");
         guint sector_size = DEFAULT_SECTOR_SIZE;
 
+        if (!fp) {
+            /* If not found in /sys/block/<dev>, it might be a partition.
+             * Try to find the parent device. */
+            gchar *slash = strchr(device, '/');
+            if (!slash) {
+                /* For devices like nvme0n1p1, the block device is in /sys/class/block/nvme0n1p1/.. */
+                gchar *link_path = g_strdup_printf("/sys/class/block/%s", device);
+                gchar *real_path = realpath(link_path, NULL);
+                if (real_path) {
+                    /* real_path looks like /sys/devices/.../block/nvme0/nvme0n1/nvme0n1p1 */
+                    /* We want /sys/devices/.../block/nvme0/nvme0n1/queue/logical_block_size */
+                    gchar *parent_path = g_path_get_dirname(real_path);
+                    if (parent_path) {
+                        gchar *lb_path = g_build_filename(parent_path, "queue", "logical_block_size", NULL);
+                        fp = fopen(lb_path, "r");
+                        if (!fp) {
+                            /* Try one more level up if it's a partition of a partition or something */
+                            gchar *grandparent_path = g_path_get_dirname(parent_path);
+                            if (grandparent_path) {
+                                gchar *lb_path2 = g_build_filename(grandparent_path, "queue", "logical_block_size", NULL);
+                                fp = fopen(lb_path2, "r");
+                                g_free(lb_path2);
+                            }
+                            g_free(grandparent_path);
+                        }
+                        g_free(lb_path);
+                    }
+                    g_free(parent_path);
+                    free(real_path);
+                }
+                g_free(link_path);
+            }
+        }
+
         if (fp) {
             if (fscanf(fp, "%u", &sector_size) != 1) {
-                g_warning("mimamorikanshi: could not parse %s, using default %d",
-                          path, DEFAULT_SECTOR_SIZE);
+                g_warning("mimamorikanshi: could not parse sector size for %s, using default %d",
+                          device, DEFAULT_SECTOR_SIZE);
                 sector_size = DEFAULT_SECTOR_SIZE;
             }
             fclose(fp);
         } else {
-            g_warning("mimamorikanshi: could not open %s, using default %d",
-                      path, DEFAULT_SECTOR_SIZE);
+            g_warning("mimamorikanshi: could not find logical_block_size for %s, using default %d",
+                      device, DEFAULT_SECTOR_SIZE);
         }
         g_free(path);
 
         g_hash_table_insert(state->sector_sizes,
-                            g_strdup(disks[i]),
+                            g_strdup(device),
                             GUINT_TO_POINTER(sector_size));
     }
 }
@@ -107,7 +141,9 @@ read_cpu(MonitorState *state, gdouble *out_pct)
     guint64 user, nice, system, idle, iowait, irq, softirq, steal;
     user = nice = system = idle = iowait = irq = softirq = steal = 0;
 
-    sscanf(line, "cpu %lu %lu %lu %lu %lu %lu %lu %lu",
+    sscanf(line, "cpu %" G_GUINT64_FORMAT " %" G_GUINT64_FORMAT " %" G_GUINT64_FORMAT
+                 " %" G_GUINT64_FORMAT " %" G_GUINT64_FORMAT " %" G_GUINT64_FORMAT
+                 " %" G_GUINT64_FORMAT " %" G_GUINT64_FORMAT,
            &user, &nice, &system, &idle, &iowait, &irq, &softirq, &steal);
 
     guint64 total = user + nice + system + idle + iowait + irq + softirq + steal;
@@ -142,9 +178,9 @@ read_memory(gdouble *out_pct)
     guint64 mem_total = 0, mem_available = 0;
     char line[256];
     while (fgets(line, sizeof(line), fp)) {
-        if (sscanf(line, "MemTotal: %lu kB", &mem_total) == 1)
+        if (sscanf(line, "MemTotal: %" G_GUINT64_FORMAT " kB", &mem_total) == 1)
             continue;
-        if (sscanf(line, "MemAvailable: %lu kB", &mem_available) == 1)
+        if (sscanf(line, "MemAvailable: %" G_GUINT64_FORMAT " kB", &mem_available) == 1)
             continue;
     }
     fclose(fp);
@@ -179,11 +215,8 @@ read_disk(MonitorState *state, gchar **disks, gint n_disks,
         guint64 rd, wr;
         /* Fields: major minor name reads_completed reads_merged sectors_read
                    ms_reading writes_completed writes_merged sectors_written ... */
-        guint64 dummy;
-        if (sscanf(line, " %u %u %127s %lu %lu %lu %lu %lu %lu %lu",
-                   &major, &minor, devname,
-                   &dummy, &dummy, &rd, &dummy,
-                   &dummy, &dummy, &wr) < 10)
+        if (sscanf(line, " %u %u %127s %*u %*u %" G_GUINT64_FORMAT " %*u %*u %*u %" G_GUINT64_FORMAT,
+                   &major, &minor, devname, &rd, &wr) < 5)
             continue;
 
         for (gint i = 0; i < n_disks; i++) {
@@ -258,13 +291,12 @@ read_network(MonitorState *state, gchar **networks, gint n_networks,
 
         if (match) {
             guint64 rx, tx;
-            guint64 d1, d2, d3, d4, d5, d6;
-            /* 8 receive fields then 8 transmit fields */
+            /* 8 receive fields then 8 transmit fields.
+             * We only need the 1st (rx_bytes) and 9th (tx_bytes) field. */
             if (sscanf(colon + 1,
-                       " %lu %lu %lu %lu %lu %lu %lu %lu"
-                       " %lu %lu %lu %lu %lu %lu %lu %lu",
-                       &rx, &d1, &d2, &d3, &d4, &d5, &d6, &d6,
-                       &tx, &d1, &d2, &d3, &d4, &d5, &d6, &d6) >= 10) {
+                       " %" G_GUINT64_FORMAT " %*u %*u %*u %*u %*u %*u %*u"
+                       " %" G_GUINT64_FORMAT,
+                       &rx, &tx) == 2) {
                 bytes_rx += rx;
                 bytes_tx += tx;
             }
