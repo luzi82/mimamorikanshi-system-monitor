@@ -73,9 +73,9 @@ mimamorikanshi_config_init_defaults(MimamorikanshiConfig *cfg)
     cfg->networks[0] = g_strdup("eth0");
     cfg->n_networks  = 1;
     mimamorikanshi_parse_hex_color("#0080FF", &cfg->network_download_color);
-    cfg->network_download_max_mib_s = 100;
+    cfg->network_download_max_mbit_s = 100;
     mimamorikanshi_parse_hex_color("#FF8000", &cfg->network_upload_color);
-    cfg->network_upload_max_mib_s = 100;
+    cfg->network_upload_max_mbit_s = 100;
 
     cfg->update_interval_ms = 500;
     cfg->suspend_after_ms   = 60000;
@@ -209,12 +209,12 @@ mimamorikanshi_config_load(MimamorikanshiPlugin *mmk)
                                       def.n_networks, &cfg->n_networks);
     read_color(mmk, "network-download-color", &cfg->network_download_color,
                &def.network_download_color);
-    cfg->network_download_max_mib_s = read_int(mmk, "network-download-max-mib-s",
-                                                def.network_download_max_mib_s);
+    cfg->network_download_max_mbit_s = read_int(mmk, "network-download-max-mbit-s",
+                                                def.network_download_max_mbit_s);
     read_color(mmk, "network-upload-color", &cfg->network_upload_color,
                &def.network_upload_color);
-    cfg->network_upload_max_mib_s = read_int(mmk, "network-upload-max-mib-s",
-                                              def.network_upload_max_mib_s);
+    cfg->network_upload_max_mbit_s = read_int(mmk, "network-upload-max-mbit-s",
+                                              def.network_upload_max_mbit_s);
 
     cfg->update_interval_ms = read_int(mmk, "update-interval-ms",
                                         def.update_interval_ms);
@@ -279,11 +279,11 @@ on_property_changed(XfconfChannel  *channel G_GNUC_UNUSED,
     } else if (g_strcmp0(name, "disk-write-max-mib-s") == 0 && G_VALUE_HOLDS_INT(value)) {
         cfg->disk_write_max_mib_s = g_value_get_int(value);
         need_redraw = TRUE;
-    } else if (g_strcmp0(name, "network-download-max-mib-s") == 0 && G_VALUE_HOLDS_INT(value)) {
-        cfg->network_download_max_mib_s = g_value_get_int(value);
+    } else if (g_strcmp0(name, "network-download-max-mbit-s") == 0 && G_VALUE_HOLDS_INT(value)) {
+        cfg->network_download_max_mbit_s = g_value_get_int(value);
         need_redraw = TRUE;
-    } else if (g_strcmp0(name, "network-upload-max-mib-s") == 0 && G_VALUE_HOLDS_INT(value)) {
-        cfg->network_upload_max_mib_s = g_value_get_int(value);
+    } else if (g_strcmp0(name, "network-upload-max-mbit-s") == 0 && G_VALUE_HOLDS_INT(value)) {
+        cfg->network_upload_max_mbit_s = g_value_get_int(value);
         need_redraw = TRUE;
     } else if (g_strcmp0(name, "update-interval-ms") == 0 && G_VALUE_HOLDS_INT(value)) {
         cfg->update_interval_ms = g_value_get_int(value);

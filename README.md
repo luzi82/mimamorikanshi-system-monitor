@@ -7,7 +7,7 @@ A lightweight native Xfce panel plugin that monitors system metrics with scrolli
 - **CPU** utilization %
 - **Memory** utilization %
 - **Disk** read/write throughput (MiB/s)
-- **Network** download/upload throughput (MiB/s)
+- **Network** download/upload throughput (Mbit/s)
 
 ## Features
 

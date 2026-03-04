@@ -336,13 +336,13 @@ mimamorikanshi_dialog_show(MimamorikanshiPlugin *mmk)
               mmk, "networks", cfg->networks, cfg->n_networks);
     add_color(GTK_GRID(grid), &row, "Download color:",
               mmk, "network-download-color", &cfg->network_download_color);
-    add_spin(GTK_GRID(grid), &row, "Download max (MiB/s):",
-             mmk, "network-download-max-mib-s", cfg->network_download_max_mib_s,
+    add_spin(GTK_GRID(grid), &row, "Download max (Mbit/s):",
+             mmk, "network-download-max-mbit-s", cfg->network_download_max_mbit_s,
              1, 100000, 10);
     add_color(GTK_GRID(grid), &row, "Upload color:",
               mmk, "network-upload-color", &cfg->network_upload_color);
-    add_spin(GTK_GRID(grid), &row, "Upload max (MiB/s):",
-             mmk, "network-upload-max-mib-s", cfg->network_upload_max_mib_s,
+    add_spin(GTK_GRID(grid), &row, "Upload max (Mbit/s):",
+             mmk, "network-upload-max-mbit-s", cfg->network_upload_max_mbit_s,
              1, 100000, 10);
 
     /* ── Timing ── */

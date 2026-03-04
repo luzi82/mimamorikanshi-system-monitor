@@ -218,22 +218,22 @@ read_disk(MonitorState *state, gchar **disks, gint n_disks,
 static void
 read_network(MonitorState *state, gchar **networks, gint n_networks,
              gdouble dt_sec,
-             gdouble *out_dl_mib_s, gdouble *out_ul_mib_s)
+             gdouble *out_dl_mbit_s, gdouble *out_ul_mbit_s)
 {
     guint64 bytes_rx = 0;
     guint64 bytes_tx = 0;
 
     FILE *fp = fopen("/proc/net/dev", "r");
     if (!fp) {
-        *out_dl_mib_s = 0.0;
-        *out_ul_mib_s = 0.0;
+        *out_dl_mbit_s = 0.0;
+        *out_ul_mbit_s = 0.0;
         return;
     }
 
     char line[512];
     /* Skip header lines */
-    if (fgets(line, sizeof(line), fp) == NULL) { fclose(fp); return; }
-    if (fgets(line, sizeof(line), fp) == NULL) { fclose(fp); return; }
+    if (fgets(line, sizeof(line), fp) == NULL) { *out_dl_mbit_s = 0.0; *out_ul_mbit_s = 0.0; fclose(fp); return; }
+    if (fgets(line, sizeof(line), fp) == NULL) { *out_dl_mbit_s = 0.0; *out_ul_mbit_s = 0.0; fclose(fp); return; }
 
     while (fgets(line, sizeof(line), fp)) {
         /* Format:  iface: rx_bytes rx_packets ... tx_bytes tx_packets ... */
@@ -276,11 +276,11 @@ read_network(MonitorState *state, gchar **networks, gint n_networks,
     if (state->baseline_valid && dt_sec > 0.0) {
         gdouble dr = (gdouble)(bytes_rx - state->prev_net_bytes_rx);
         gdouble dt = (gdouble)(bytes_tx - state->prev_net_bytes_tx);
-        *out_dl_mib_s = (dr / BYTES_PER_MIB) / dt_sec;
-        *out_ul_mib_s = (dt / BYTES_PER_MIB) / dt_sec;
+        *out_dl_mbit_s = dr * 8.0 / 1000000.0 / dt_sec;
+        *out_ul_mbit_s = dt * 8.0 / 1000000.0 / dt_sec;
     } else {
-        *out_dl_mib_s = 0.0;
-        *out_ul_mib_s = 0.0;
+        *out_dl_mbit_s = 0.0;
+        *out_ul_mbit_s = 0.0;
     }
 
     state->prev_net_bytes_rx = bytes_rx;
@@ -304,14 +304,14 @@ mimamorikanshi_monitor_update(MimamorikanshiPlugin *mmk)
     /* ── Collect raw samples ── */
     gdouble cpu_pct, mem_pct;
     gdouble disk_read_mib, disk_write_mib;
-    gdouble net_dl_mib, net_ul_mib;
+    gdouble net_dl_mbit, net_ul_mbit;
 
     read_cpu(st, &cpu_pct);
     read_memory(&mem_pct);
     read_disk(st, cfg->disks, cfg->n_disks, dt_sec,
               &disk_read_mib, &disk_write_mib);
     read_network(st, cfg->networks, cfg->n_networks, dt_sec,
-                 &net_dl_mib, &net_ul_mib);
+                 &net_dl_mbit, &net_ul_mbit);
 
     st->prev_time_us = now_us;
 
@@ -327,8 +327,8 @@ mimamorikanshi_monitor_update(MimamorikanshiPlugin *mmk)
     st->raw_values[ROW_MEMORY]       = mem_pct;
     st->raw_values[ROW_DISK_READ]    = disk_read_mib;
     st->raw_values[ROW_DISK_WRITE]   = disk_write_mib;
-    st->raw_values[ROW_NET_DOWNLOAD] = net_dl_mib;
-    st->raw_values[ROW_NET_UPLOAD]   = net_ul_mib;
+    st->raw_values[ROW_NET_DOWNLOAD] = net_dl_mbit;
+    st->raw_values[ROW_NET_UPLOAD]   = net_ul_mbit;
 
     /* ── Normalize to 0.0–1.0 for graph bars ── */
     st->values[ROW_CPU]    = clamp01(cpu_pct / 100.0);
@@ -336,11 +336,11 @@ mimamorikanshi_monitor_update(MimamorikanshiPlugin *mmk)
 
     gdouble drm = cfg->disk_read_max_mib_s  > 0 ? cfg->disk_read_max_mib_s  : 100.0;
     gdouble dwm = cfg->disk_write_max_mib_s > 0 ? cfg->disk_write_max_mib_s : 100.0;
-    gdouble ndm = cfg->network_download_max_mib_s > 0 ? cfg->network_download_max_mib_s : 100.0;
-    gdouble num = cfg->network_upload_max_mib_s   > 0 ? cfg->network_upload_max_mib_s   : 100.0;
+    gdouble ndm = cfg->network_download_max_mbit_s > 0 ? cfg->network_download_max_mbit_s : 100.0;
+    gdouble num = cfg->network_upload_max_mbit_s   > 0 ? cfg->network_upload_max_mbit_s   : 100.0;
 
     st->values[ROW_DISK_READ]    = clamp01(disk_read_mib  / drm);
     st->values[ROW_DISK_WRITE]   = clamp01(disk_write_mib / dwm);
-    st->values[ROW_NET_DOWNLOAD] = clamp01(net_dl_mib     / ndm);
-    st->values[ROW_NET_UPLOAD]   = clamp01(net_ul_mib     / num);
+    st->values[ROW_NET_DOWNLOAD] = clamp01(net_dl_mbit    / ndm);
+    st->values[ROW_NET_UPLOAD]   = clamp01(net_ul_mbit    / num);
 }

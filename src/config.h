@@ -50,9 +50,9 @@ struct _MimamorikanshiConfig {
     gchar **networks;
     gint n_networks;
     GdkRGBA network_download_color;
-    gint network_download_max_mib_s;
+    gint network_download_max_mbit_s;
     GdkRGBA network_upload_color;
-    gint network_upload_max_mib_s;
+    gint network_upload_max_mbit_s;
 
     /* Timing */
     gint update_interval_ms;
