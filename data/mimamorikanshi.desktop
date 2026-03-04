@@ -6,3 +6,4 @@ Comment=Monitor CPU, memory, disk, and network usage
 Icon=utilities-system-monitor
 X-XFCE-Module=mimamorikanshi
 X-XFCE-Internal=FALSE
+X-XFCE-API=2.0
