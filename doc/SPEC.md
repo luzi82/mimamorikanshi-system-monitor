@@ -108,8 +108,7 @@ A settings dialog is provided to modify the plugin configuration. It follows Xfc
 
 Behavior on suspend/resume:
 - **Suspend**: stop the GLib timer used for regular polling and pause expensive work (disk/net parsing, large Cairo compositing). Keep minimal state alive to allow quick resume.
-- **Resume**: on detecting an active condition, reinitialize short-lived baselines (e.g., reset previous /proc counters used for delta calculations) rather than emitting a large instantaneous spike. Skip or emit a clipped first sample and then resume normal polling.
-- **Resume**: on detecting an active condition, reinitialize short-lived baselines (e.g., reset previous `/proc` counters used for delta calculations) and discard the first measurement/sample after resume to avoid a large instantaneous spike. After discarding that first measurement, resume normal polling and recording.
+- **Resume**: on detecting an active condition, reinitialize short-lived baselines (e.g., reset previous `/proc` counters used for delta calculations) and discard the first measurement/sample after resume to avoid a large instantaneous spike; after discarding that first measurement, resume normal polling and recording. An implementation MAY instead emit a clipped first sample if preferred, but must avoid showing a large spurious spike.
 - **Configurable**: `suspend-after-ms = 0` disables suspension. `suspend-poll-ms` controls how quickly the plugin detects resume while suspended.
 
 Implementations should log suspend/resume events at debug level for troubleshooting.
