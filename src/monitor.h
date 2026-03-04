@@ -9,6 +9,7 @@
 
 #include <glib.h>
 #include "common.h"
+#include "parser/proc_stat_parser.h"
 
 typedef struct _MonitorState MonitorState;
 

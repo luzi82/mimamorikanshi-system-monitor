@@ -89,29 +89,17 @@ mimamorikanshi_monitor_refresh_sector_sizes(MonitorState *state,
 static void
 read_cpu(MonitorState *state, gdouble *out_pct)
 {
-    FILE *fp = fopen("/proc/stat", "r");
-    if (!fp) {
+    ProcStatData data;
+    proc_stat_parse("/proc/stat", &data);
+
+    if (!data.valid) {
         *out_pct = 0.0;
         return;
     }
 
-    char line[512];
-    if (!fgets(line, sizeof(line), fp)) {
-        fclose(fp);
-        *out_pct = 0.0;
-        return;
-    }
-    fclose(fp);
-
-    /* cpu  user nice system idle iowait irq softirq steal guest guest_nice */
-    guint64 user, nice, system, idle, iowait, irq, softirq, steal;
-    user = nice = system = idle = iowait = irq = softirq = steal = 0;
-
-    sscanf(line, "cpu %lu %lu %lu %lu %lu %lu %lu %lu",
-           &user, &nice, &system, &idle, &iowait, &irq, &softirq, &steal);
-
-    guint64 total = user + nice + system + idle + iowait + irq + softirq + steal;
-    guint64 idle_all = idle + iowait;
+    guint64 total    = data.user + data.nice + data.system + data.idle
+                     + data.iowait + data.irq + data.softirq + data.steal;
+    guint64 idle_all = data.idle + data.iowait;
 
     if (state->baseline_valid) {
         guint64 dtotal = total - state->prev_cpu_total;

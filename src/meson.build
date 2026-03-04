@@ -5,6 +5,7 @@ plugin_sources = files(
   'drawing.c',
   'dialog.c',
   'suspend.c',
+  'parser/proc_stat_parser.c',
 )
 
 shared_library('mimamorikanshi',
