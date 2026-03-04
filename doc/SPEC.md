@@ -72,6 +72,8 @@ Properties are stored in the `xfce4-panel` channel under the base path `/plugins
 | `network-upload-color` | string | Hex color |
 | `network-upload-max-mib-s` | int | Y-axis scale for upload |
 | `update-interval-ms` | int | Polling interval (default: 500) |
+| `suspend-after-ms` | int | Milliseconds of continuous inactivity (screen off, panel hidden, or screen locked) after which the plugin suspends timer ticks (0 = disabled; default: 60000) |
+| `suspend-poll-ms` | int | Milliseconds between lightweight resume-check polls when suspended (default: 5000) |
 
 ### Configuration UI
 A settings dialog is provided to modify the plugin configuration. It follows Xfce design guidelines:
@@ -99,6 +101,14 @@ A settings dialog is provided to modify the plugin configuration. It follows Xfc
 * The plugin should be lightweight, minimizing CPU wakeups by using GLib timers aligned with the desired `update-interval-ms`.
 * Cairo surfaces should be managed efficiently to avoid unnecessary re-allocations on every tick.
 * Configuration changes in Xfconf should be handled via "property-changed" signals to allow real-time updates without restarting the panel.
+* **Suspend/Resume on Inactivity**: To conserve power when the user is not actively viewing the panel, the plugin SHOULD suspend its regular polling/timer ticks after `suspend-after-ms` of inactivity. "Inactivity" includes events such as the screen being turned off (DPMS), the panel or plugin being hidden/unmapped, or the session being locked. Detection strategy should prefer event-driven signals where available (widget `show`/`hide`, X11 DPMS notifications, and `org.freedesktop.ScreenSaver` or logind/ConsoleKit DBus signals). When event signals are unavailable or unreliable, a lightweight polling check (interval configured by `suspend-poll-ms`) may be used while suspended to detect resume conditions.
+
+Behavior on suspend/resume:
+- **Suspend**: stop the GLib timer used for regular polling and pause expensive work (disk/net parsing, large Cairo compositing). Keep minimal state alive to allow quick resume.
+- **Resume**: on detecting an active condition, reinitialize short-lived baselines (e.g., reset previous /proc counters used for delta calculations) rather than emitting a large instantaneous spike. Skip or emit a clipped first sample and then resume normal polling.
+- **Configurable**: `suspend-after-ms = 0` disables suspension. `suspend-poll-ms` controls how quickly the plugin detects resume while suspended.
+
+Implementations should log suspend/resume events at debug level for troubleshooting.
 
 ===
 
