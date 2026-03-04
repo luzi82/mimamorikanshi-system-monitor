@@ -29,7 +29,7 @@ The following is the updated spec of software project MimamoriKanshi-system-moni
   5. Network download MiB/s
   6. Network upload MiB/s
 * **For each row**:
-  * **Scrolling History**: A graph where the x-axis represents time (1 pixel per update) and the y-axis represents the value.
+  * **Scrolling History**: A graph where the x-axis represents time (1 pixel per update) and the y-axis represents the value. Implement this using a background per-row circular image buffer (Cairo image surface) to avoid full-widget redraws on every tick: allocate a cairo image surface sized to the graph area, maintain a write index (x position) that advances by 1 pixel per update, draw the new vertical column (latest-value bar) into the surface at the current index, then composite the surface into the widget using the appropriate offset so the visual output appears continuously scrolling. Create or recreate the image surfaces on startup and on resize; cache the surfaces and reuse them between ticks. If the image-surface path is unavailable (e.g., allocation failure), fall back to a safe full redraw implementation.
   * **Latest Value**: The rightmost section (`latest-value-px` width) displays the most recent value as a solid bar.
   * **Text Overlay**: Current numeric value displayed on the left, rounding to the nearest integer.
   * **Scaling**: For CPU/Memory, max is 100%. For Disk/Network, the max is configurable; values exceeding max are clipped to the top of the graph.
@@ -39,7 +39,7 @@ The following is the updated spec of software project MimamoriKanshi-system-moni
 ### Monitoring Logic
 * **CPU**: Read from `/proc/stat`, calculate utilization based on the difference between successive reads.
 * **Memory**: Read from `/proc/meminfo` (Total - Available).
-* **Disk**: Read from `/proc/diskstats`. Sum the sectors read/written for all configured disks and convert to MiB/s.
+* **Disk**: Read from `/proc/diskstats`. Sum the sectors read/written for all configured disks and convert to MiB/s. To accurately convert sector counts to bytes, the plugin MUST read the per-device sector size from `/sys/block/<dev>/queue/logical_block_size` at program start and whenever the configured `disks` list changes. Use the reported `logical_block_size` (bytes per sector) to convert sectors → bytes → MiB/s. Cache per-device sector sizes and refresh them on configuration changes. If a sysfs entry is unavailable or unreadable, fall back to a sensible default (512 bytes) and log a warning.
 * **Network**: Read from `/proc/net/dev`. Sum the bytes received/transmitted for all configured interfaces and convert to MiB/s.
 
 ### Configuration (Xfconf)
