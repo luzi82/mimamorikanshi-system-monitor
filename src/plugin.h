@@ -45,9 +45,6 @@ struct _MimamorikanshiPlugin {
 
     /* Suspend / resume */
     SuspendState suspend;
-
-    /* Set to TRUE once the very first valid sample has been emitted */
-    gboolean first_sample_discarded;
 };
 
 /* Calculate total widget height from config */
