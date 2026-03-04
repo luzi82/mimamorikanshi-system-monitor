@@ -120,6 +120,14 @@ on_entry_activate(GtkEntry *entry, gpointer data)
     g_strfreev(parts);
 }
 
+static gboolean
+on_entry_focus_out(GtkWidget *widget, GdkEventFocus *event G_GNUC_UNUSED,
+                   gpointer data)
+{
+    on_entry_activate(GTK_ENTRY(widget), data);
+    return FALSE;
+}
+
 /* ── Widget construction helpers ─────────────────────────────────── */
 
 static GtkWidget *
@@ -203,10 +211,11 @@ add_entry(GtkGrid *grid, gint *row, const gchar *label_text,
     g_signal_connect_data(entry, "activate",
                           G_CALLBACK(on_entry_activate), ctx,
                           prop_ctx_free, 0);
-    /* Also update on focus-out */
+    /* Also update on focus-out – needs its own ctx and correct signature */
+    PropCtx *ctx2 = prop_ctx_new(mmk, prop);
     g_signal_connect_data(entry, "focus-out-event",
-                          G_CALLBACK(on_entry_activate), ctx,
-                          NULL, 0);
+                          G_CALLBACK(on_entry_focus_out), ctx2,
+                          prop_ctx_free, 0);
     (*row)++;
     return entry;
 }
