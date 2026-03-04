@@ -41,7 +41,7 @@
 * **Network**: Read from `/proc/net/dev`. Sum the bytes received/transmitted for all configured interfaces and convert to MiB/s.
 
 ### Configuration (Xfconf)
-Properties are stored in the `xfce4-panel` channel under the base path `/plugins/panel/mimamorikanshi-N/` (where `N` is the plugin instance ID).
+Properties are stored in the `xfce4-panel` channel under the base path `/plugins/panel/mimamorikanshi-N/` (where `N` is the plugin instance ID). Standard Xfce practice is to bind these properties directly to the UI widgets for immediate updates.
 
 | Property | Type | Description |
 |----------|------|-------------|
@@ -71,11 +71,25 @@ Properties are stored in the `xfce4-panel` channel under the base path `/plugins
 | `network-upload-max-mib-s` | int | Y-axis scale for upload |
 | `update-interval-ms` | int | Polling interval (default: 500) |
 
+### Configuration UI
+A settings dialog is provided to modify the plugin configuration. It follows Xfce design guidelines:
+* **Architecture**: A standard Xfce settings dialog implemented using `libxfce4ui-2.0`.
+* **Layout**: A single scrollable list of settings.
+* **Widgets**:
+  * **Colors**: `GtkColorButton` for all color selections.
+  * **Fonts**: `GtkFontButton` for text styling.
+  * **Dimensions/Intervals**: `GtkSpinButton` for numeric values.
+  * **Devices**: `GtkEntry` for comma-separated or list-based device and network interface selection.
+* **Behavior**:
+  * Changes are applied **immediately** to Xfconf upon widget interaction.
+  * The dialog is launched from the standard Xfce panel plugin "Properties" menu item.
+
 ### Build Requirements
 * **Build System**: Meson & Ninja
 * **Dependencies**:
   * `gtk+-3.0`
   * `libxfce4panel-2.0`
+  * `libxfce4ui-2.0`
   * `libxfconf-0`
   * `libcairo2`
 
