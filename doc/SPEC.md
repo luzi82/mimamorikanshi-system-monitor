@@ -1,8 +1,10 @@
+The following is the updated spec of software project MimamoriKanshi-system-monitor
+
 # SPEC - MimamoriKanshi System Monitor (C/GTK Version)
 
 ## Aim
 
-* A native Xfce panel indicator widget to monitor the following system status:
+* A native Xfce panel plugin to monitor the following system metrics:
   * CPU %
   * Memory %
   * Disk read/write throughput
@@ -28,7 +30,7 @@
   6. Network upload MiB/s
 * **For each row**:
   * **Scrolling History**: A graph where the x-axis represents time (1 pixel per update) and the y-axis represents the value.
-  * **Latest Value**: The rightmost section (`latest_value_px` width) displays the most recent value as a solid bar.
+  * **Latest Value**: The rightmost section (`latest-value-px` width) displays the most recent value as a solid bar.
   * **Text Overlay**: Current numeric value displayed on the left, rounding to the nearest integer.
   * **Scaling**: For CPU/Memory, max is 100%. For Disk/Network, the max is configurable; values exceeding max are clipped to the top of the graph.
 
@@ -97,3 +99,11 @@ A settings dialog is provided to modify the plugin configuration. It follows Xfc
 * The plugin should be lightweight, minimizing CPU wakeups by using GLib timers aligned with the desired `update-interval-ms`.
 * Cairo surfaces should be managed efficiently to avoid unnecessary re-allocations on every tick.
 * Configuration changes in Xfconf should be handled via "property-changed" signals to allow real-time updates without restarting the panel.
+
+===
+
+For the above spec:
+* Comment
+* Check typo
+* Suggest improvement
+* Ask question
