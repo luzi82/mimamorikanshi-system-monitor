@@ -1,10 +1,8 @@
-The following is the updated spec of software project MimamoriKanshi-system-monitor
-
-# SPEC
+# SPEC - MimamoriKanshi System Monitor (C/GTK Version)
 
 ## Aim
 
-* An indicator widget to monitor the following system status
+* A native Xfce panel indicator widget to monitor the following system status:
   * CPU %
   * Memory %
   * Disk read/write throughput
@@ -12,169 +10,76 @@ The following is the updated spec of software project MimamoriKanshi-system-moni
 
 ## Design
 
-* Two executables
-  * DAEMON
-    * A background monitor daemon
-    * monitor system usage
-    * generate indicator image file
-  * GENMON:
-    * Called by xfce4-genmon-plugin
-    * launch DAEMON
-    * echo DAEMON image path to xfce4-genmon-plugin
-    * Tick interval: set by xfce4-genmon-plugin (my target: 0.5s)
-* Run flow (for GENMON interval=tick_ms=500)
-  1. t=0s, GENMON launch, start DAEMON, show empty image, exit
-  1. t=0.01s, DAEMON start, generate indicator image file, wait for next tick
-  1. t=0.5s, GENMON launch, echo DAEMON image output to xfce4-genmon-plugin, exit
-  1. t=0.51s, DAEMON wait done, generate indicator image file, wait for next tick
-  1. t=1s, GENMON launch, echo DAEMON image output to xfce4-genmon-plugin, exit
-  1. t=1.01s, DAEMON wait done, generate indicator image file, wait for next tick
-* Indicator image design
-  * 6 rows
-    * CPU %
-    * Memory %
-    * Disk read MiB/s
-    * Disk write MiB/s
-      * sum of selected disks in config
-    * Network download MiB/s
-    * Network upload MiB/s
-      * sum of selected networks in config
-  * For each row
-    * x-axis: time
-      * 1 pixel per DAEMON tick
-      * the right most latest_value_px width show the latest value
-    * y-axis: value
-      * For CPU/memory, max is 100%
-      * For other, max is set in config
-        * if value is over max, just draw to max.
-    * text align to left
-      * overlap the history graph
-      * show current value
-      * only number, round to nearest integer, no "%" and "MiB/s"
+* **Integrated Plugin**: A single C executable implemented as a native Xfce panel plugin using `libxfce4panel-2.0`.
+* **UI Framework**: GTK3 for widget management and lifecycle.
+* **Rendering**: Direct drawing using Cairo. No external image files or shared memory buffers are used.
+* **Configuration**: Standard Xfce configuration storage via **Xfconf**.
+* **Data Collection**: Periodic polling of `/proc` filesystem.
 
-## DAEMON
+## Visual Design
 
-* Python script
-* Monitoring
-  * CPU: /proc/stat
-  * Memory: /proc/meminfo
-  * Disk read/write:
-    * /proc/diskstats
-    * diff with last value
-  * Network up/down:
-    * /proc/net/dev
-    * diff with last value
-* Process
-  1. Launched by GENMON
-  1. If another DAEMON instance is already running, exit.
-  1. Loop in background
-    1. Read GENMON.out
-    1. If GENMON timestamp is lesser than last time, system clock may be modified, exit immediately, will be respawn by next GENMON tick
-    1. If GENMON inactive for daemon_exit_if_genmon_inactive_sec, exit immediately
-    1. If the modification time of config.yaml updated, exit immediately, will be respawn by next GENMON tick
-    1. Get system usage values
-    1. Output the indicator image to the unused image path
-    1. Write DAEMON.out, mark the last output image path
-    1. Wait to estimated next genmon tick + genmon_after_daemon_min_gap_ms
-      * if wait time bigger than 2*tick_ms, exit immediately, will be respawn by next GENMON tick
+* Designed primarily for use in a **vertical panel**.
+* **6 rows** of monitoring data:
+  1. CPU %
+  2. Memory %
+  3. Disk read MiB/s
+  4. Disk write MiB/s
+  5. Network download MiB/s
+  6. Network upload MiB/s
+* **For each row**:
+  * **Scrolling History**: A graph where the x-axis represents time (1 pixel per update) and the y-axis represents the value.
+  * **Latest Value**: The rightmost section (`latest_value_px` width) displays the most recent value as a solid bar.
+  * **Text Overlay**: Current numeric value displayed on the left, rounding to the nearest integer.
+  * **Scaling**: For CPU/Memory, max is 100%. For Disk/Network, the max is configurable; values exceeding max are clipped to the top of the graph.
 
-## GENMON
+## Implementation Details
 
-* Bash script
-* Echo DAEMON image output path to xfce4-genmon-plugin
-* Process
-  1. Launched by xfce4-genmon-plugin
-  1. If another GENMON instance is already running, exit.
-  1. If no running DAEMON instance
-    1. Write GENMON.out: img_id = -1, timestamp=now
-    1. launch DAEMON in background
-    1. echo loading text to xfce4-genmon-plugin
-    1. exit
-  1. If DAEMON is active, echo DAEMON last generated image to xfce4-genmon-plugin
-  1. Write GENMON.out, mark the execution timestamp, the reading image path
-  1. exit
+### Monitoring Logic
+* **CPU**: Read from `/proc/stat`, calculate utilization based on the difference between successive reads.
+* **Memory**: Read from `/proc/meminfo` (Total - Available).
+* **Disk**: Read from `/proc/diskstats`. Sum the sectors read/written for all configured disks and convert to MiB/s.
+* **Network**: Read from `/proc/net/dev`. Sum the bytes received/transmitted for all configured interfaces and convert to MiB/s.
 
-## Work folder /dev/shm/mimamorikanshi
+### Configuration (Xfconf)
+Properties are stored in the `xfce4-panel` channel under the base path `/plugins/panel/mimamorikanshi-N/` (where `N` is the plugin instance ID).
 
-* lock
-  * lock file used by DAEMON and GENMON
-  * Use non-blocking flock
-  * Read operations to other files: lock this file, read the target file, unlock this file
-  * Write operations to other files: write to tmp file, lock this file, replace the target file with tmp file, unlock this file
-* DAEMON.run
-  * read/write protected by lock file
-  * file to check DAEMON running
-  * pid + start_time
-* DAEMON.out
-  * read/write protected by lock file
-  * key=value format
-  * timestamp: DAEMON last execution time
-  * img_id: the ID of last image generated
-* GENMON.run
-  * read/write protected by lock file
-  * file to check GENMON running
-  * pid + start_time
-* GENMON.out
-  * read/write protected by lock file
-  * key=value format
-  * timestamp: GENMON last execution time
-  * img_id: the ID of last image echoed to xfce4-genmon-plugin
-* img.0.ppm, img.1.ppm, img.2.ppm
-  * Image generated by DAEMON, read by xfce4-genmon-plugin
-  * Act like 3 image buffer
-  * ID: 0, 1, 2
-  * When DAEMON last generate is ID=D, GENMON last echo is ID=G, DAEMON should choose ID!=D/G for the next generate
-  * Only 3 images, there is no img.3.ppm .
+| Property | Type | Description |
+|----------|------|-------------|
+| `width-px` | int | Total widget width |
+| `height-px` | int | Height per data row |
+| `latest-value-px` | int | Width of the latest value bar |
+| `background-color` | string | Hex color (e.g., `#000000`) |
+| `border-px` | int | Width of the widget border |
+| `border-color` | string | Hex color |
+| `separator-px` | int | Width of the separator between rows |
+| `separator-color` | string | Hex color |
+| `text-color` | string | Hex color |
+| `text-left-padding-px` | int | Horizontal padding for text overlay |
+| `text-font-family` | string | Font family name |
+| `text-font-size` | int | Font size in points |
+| `cpu-color` | string | Hex color for CPU graph |
+| `memory-color` | string | Hex color for Memory graph |
+| `disks` | array(string)| List of disk IDs (e.g., `sda`, `nvme0n1`) |
+| `disk-read-color` | string | Hex color |
+| `disk-read-max-mib-s` | int | Y-axis scale for disk read |
+| `disk-write-color` | string | Hex color |
+| `disk-write-max-mib-s` | int | Y-axis scale for disk write |
+| `networks` | array(string)| List of interface names (e.g., `eth0`, `wlan0`) |
+| `network-download-color` | string | Hex color |
+| `network-download-max-mib-s` | int | Y-axis scale for download |
+| `network-upload-color` | string | Hex color |
+| `network-upload-max-mib-s` | int | Y-axis scale for upload |
+| `update-interval-ms` | int | Polling interval (default: 500) |
 
-## config.yaml
+### Build Requirements
+* **Build System**: Meson & Ninja
+* **Dependencies**:
+  * `gtk+-3.0`
+  * `libxfce4panel-2.0`
+  * `libxfconf-0`
+  * `libcairo2`
 
-* read by DAEMON
-* width_px: image width px (estimate around 26)
-* height_px: height px per data row (estimate around 10)
-* latest_value_px
-* background_color
-* border_px: px of whole image border
-* border_color: color of whole image border
-* separator_px: px between rows
-* separator_color
-* text_color
-* text_left_padding_px
-* text_font_family: font of text
-* text_font_size: font size
-* cpu_color
-* memory_color
-* disks: list of disk ID to be monitored in /proc/diskstats
-* disk_read_color
-* disk_read_max_mib_s: max MiByte/s in graph y axis
-* disk_write_color
-* disk_write_max_mib_s: max MiByte/s in graph y axis
-* networks: list of network ID to be monitored in /proc/net/dev
-* network_download_color
-* network_download_max_mib_s: max MiByte/s in graph y axis
-* network_upload_color
-* network_upload_max_mib_s: max MiByte/s in graph y axis
-* tick_ms: DAEMON/GENMON tick ms, user should sync it with xfce4-genmon-plugin setting
-* genmon_after_daemon_min_gap_ms: the min time gap between daemon and genmon tick.  If the tick getting close, daemon should add more delay.  Otherwise if the tick too close, genmon may skip frame or keep drawing old frame.
-* daemon_exit_if_genmon_inactive_sec: if GENMON.out not updated for that sec, DAEMON exit.
-
-## remark
-
-* No rm anything in /dev/shm/mimamorikanshi/*
-  * The files in /dev/shm/mimamorikanshi/ are very small
-  * File number not incremental
-  * rm operations are dangerous
-  * /dev/shm is tmpfs, always clear when reboot
-  * User may trigger other GENMON/DAEMON instance in the middle of rm operation, very hard to debug
-* /proc/\* vs python3-psutil
-  * python3-psutil have higher overhead
-* xfce4-genmon-plugin support ppm p6 binary, tested in Xbuntu 24.04.
-* Will use Python pillow to draw ppm p6 binary image
-* The widget is designed to be put in vertical panel.
-
-===
-
-For the above spec:
-* Comment
-* Check typo
-* Suggest improvement
-* Ask question
+## Remark
+* The plugin should be lightweight, minimizing CPU wakeups by using GLib timers aligned with the desired `update-interval-ms`.
+* Cairo surfaces should be managed efficiently to avoid unnecessary re-allocations on every tick.
+* Configuration changes in Xfconf should be handled via "property-changed" signals to allow real-time updates without restarting the panel.
