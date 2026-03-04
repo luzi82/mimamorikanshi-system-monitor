@@ -1,1 +1,15 @@
 __pycache__/
+
+# Meson build directory
+builddir/
+build/
+
+# Compiled objects
+*.o
+*.so
+*.a
+
+# Editor files
+*.swp
+*~
+.vscode/

@@ -1,0 +1,8 @@
+[Xfce Panel]
+Type=X-XFCE-PanelPlugin
+Encoding=UTF-8
+Name=MimamoriKanshi System Monitor
+Comment=Monitor CPU, memory, disk, and network usage
+Icon=utilities-system-monitor
+X-XFCE-Module=mimamorikanshi
+X-XFCE-Internal=FALSE
